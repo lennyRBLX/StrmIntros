@@ -9,3 +9,7 @@ x64/
 build/
 [Bb]in/
 [Oo]bj/
+
+# Claude Code
+.claude/
+CLAUDE.md
