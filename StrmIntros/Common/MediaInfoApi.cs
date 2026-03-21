@@ -35,6 +35,7 @@ namespace StrmIntros.Common
         private const string MediaInfoFileExtension = "-mediainfo.json";
 
         private readonly bool _fallbackApproach;
+        private readonly MethodInfo _getPlaybackMediaSources;
         private readonly MethodInfo _getStaticMediaSources;
 
         internal class MediaSourceWithChapters
@@ -61,6 +62,13 @@ namespace StrmIntros.Common
             {
                 try
                 {
+                    _getPlaybackMediaSources = mediaSourceManager.GetType()
+                        .GetMethod("GetPlayackMediaSources",
+                            new[]
+                            {
+                                typeof(BaseItem), typeof(User), typeof(bool), typeof(string), typeof(bool),
+                                typeof(bool), typeof(DeviceProfile), typeof(CancellationToken)
+                            });
                     _getStaticMediaSources = mediaSourceManager.GetType()
                         .GetMethod("GetStaticMediaSources",
                             new[]
@@ -79,7 +87,7 @@ namespace StrmIntros.Common
                     }
                 }
 
-                if (_getStaticMediaSources is null)
+                if (_getPlaybackMediaSources is null || _getStaticMediaSources is null)
                 {
                     _logger.Warn($"{nameof(MediaInfoApi)} Init Failed");
                 }
@@ -108,6 +116,33 @@ namespace StrmIntros.Common
 
                 _logger.Warn($"{nameof(MediaInfoApi)} Init Failed");
             }
+        }
+
+        private Task<List<MediaSourceInfo>> GetPlaybackMediaSourcesByApi(BaseItem item, string probeMediaSourceId,
+            CancellationToken cancellationToken)
+        {
+            return _mediaSourceManager
+                .GetPlayackMediaSources(item, null, true, probeMediaSourceId, false, null,
+                    cancellationToken);
+        }
+
+        private Task<List<MediaSourceInfo>> GetPlaybackMediaSourcesByRef(BaseItem item,
+            string probeMediaSourceId, CancellationToken cancellationToken)
+        {
+            return (Task<List<MediaSourceInfo>>)_getPlaybackMediaSources.Invoke(_mediaSourceManager,
+                new object[]
+                {
+                    item, null, true, probeMediaSourceId, false, false, null, cancellationToken
+                });
+        }
+
+        public Task<List<MediaSourceInfo>> GetPlaybackMediaSources(BaseItem item, CancellationToken cancellationToken)
+        {
+            var mediaSourceId = item.GetDefaultMediaSourceId();
+
+            return !_fallbackApproach
+                ? GetPlaybackMediaSourcesByApi(item, mediaSourceId, cancellationToken)
+                : GetPlaybackMediaSourcesByRef(item, mediaSourceId, cancellationToken);
         }
 
         private List<MediaSourceInfo> GetStaticMediaSourcesByApi(BaseItem item, bool enableAlternateMediaSources,

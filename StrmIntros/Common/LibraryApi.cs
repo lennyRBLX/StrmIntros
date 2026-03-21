@@ -665,19 +665,6 @@ namespace StrmIntros.Common
                 if (file?.Exists != true) return null;
             }
 
-            var collectionFolders = (BaseItem[])_libraryManager.GetCollectionFolders(taskItem);
-            var libraryOptions = _libraryManager.GetLibraryOptions(taskItem);
-
-            var dummyLibraryOptions = CopyLibraryOptions(libraryOptions);
-            dummyLibraryOptions.DisabledLocalMetadataReaders = new[] { "Nfo" };
-            dummyLibraryOptions.MetadataSavers = Array.Empty<string>();
-
-            foreach (var option in dummyLibraryOptions.TypeOptions)
-            {
-                option.MetadataFetchers = Array.Empty<string>();
-                option.ImageFetchers = Array.Empty<string>();
-            }
-
             if (persistMediaInfo)
             {
                 var deserializeResult =
@@ -699,14 +686,19 @@ namespace StrmIntros.Common
 
             if (extractSkip) return null;
 
-            taskItem.DateLastRefreshed = new DateTimeOffset();
-
-            await _providerManager
-                .RefreshSingleItem(taskItem, refreshOptions, collectionFolders, dummyLibraryOptions, cancellationToken)
-                .ConfigureAwait(false);
+            await Plugin.MediaInfoApi.GetPlaybackMediaSources(taskItem, cancellationToken).ConfigureAwait(false);
 
             if (persistMediaInfo)
             {
+                var refreshedItem = _libraryManager.GetItemById(taskItem.InternalId);
+                if (!HasMediaInfo(refreshedItem))
+                {
+                    _logger.Debug(
+                        $"MediaInfoExtract - No media info after refresh: {taskItem.Name} - {taskItem.Path}" +
+                        $" (RunTimeTicks={refreshedItem.RunTimeTicks}, Size={refreshedItem.Size}," +
+                        $" Streams={refreshedItem.GetMediaStreams().Count})");
+                }
+
                 await Plugin.MediaInfoApi.SerializeMediaInfo(taskItem.InternalId, directoryService, true, source)
                     .ConfigureAwait(false);
             }
