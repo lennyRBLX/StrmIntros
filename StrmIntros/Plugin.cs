@@ -61,6 +61,8 @@ namespace StrmIntros
         public static MetadataApi MetadataApi { get; private set; }
         public static VideoThumbnailApi VideoThumbnailApi { get; private set; }
         public static IntroDbApi IntroDbApi { get; private set; }
+        public static TheIntroDbApi TheIntroDbApi { get; private set; }
+        public static PublicMetaDbApi PublicMetaDbApi { get; private set; }
 
         private readonly Guid _id = new Guid("f1f8d9b6-c9a3-4130-a1c5-93df3f6553c5");
 
@@ -158,6 +160,8 @@ namespace StrmIntros
             VideoThumbnailApi = new VideoThumbnailApi(libraryManager, fileSystem, imageExtractionManager, itemRepository,
                 mediaMountManager, serverApplicationPaths, libraryMonitor, ffmpegManager);
             IntroDbApi = new IntroDbApi(httpClient, jsonSerializer, itemRepository);
+            TheIntroDbApi = new TheIntroDbApi(httpClient, jsonSerializer, itemRepository);
+            PublicMetaDbApi = new PublicMetaDbApi(httpClient, jsonSerializer, itemRepository);
             ShortcutMenuHelper.Initialize(configurationManager);
 
             if (_currentCatchupMode) QueueManager.Initialize();

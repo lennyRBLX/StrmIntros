@@ -51,13 +51,13 @@ namespace StrmIntros.ScheduledTask
 
             _logger.Info($"MediaInfoExtract - Total items before pre-pass: {items.Count}");
 
-            // Media info sync pre-pass: sync between SQLite DB and mediainfo JSON files
-            if (persistMediaInfo && !mediaInfoRestoreMode)
+            // Media info sync pre-pass: restore from JSON first, then backfill DB → JSON
+            if (persistMediaInfo)
             {
                 var syncDirectoryService = new DirectoryService(_logger, _fileSystem);
-                var jsonBackfillCount = 0;
                 var jsonRestoredCount = 0;
 
+                // JSON → DB: restore media info from JSON for items missing it
                 foreach (var item in items)
                 {
                     if (cancellationToken.IsCancellationRequested)
@@ -66,30 +66,50 @@ namespace StrmIntros.ScheduledTask
                         return;
                     }
 
-                    if (Plugin.LibraryApi.HasMediaInfo(item))
+                    if (!Plugin.LibraryApi.HasMediaInfo(item))
                     {
-                        // DB → JSON: persist existing DB media info to JSON
-                        await Plugin.MediaInfoApi
-                            .SerializeMediaInfo(item.InternalId, syncDirectoryService, false,
-                                "MediaInfoExtract MediaInfoSync")
-                            .ConfigureAwait(false);
-                        jsonBackfillCount++;
-                    }
-                    else
-                    {
-                        // JSON → DB: restore media info from JSON if DB is missing it
                         var restored = await Plugin.MediaInfoApi
                             .DeserializeMediaInfo(item, syncDirectoryService,
-                                "MediaInfoExtract MediaInfoSync", false)
+                                "MediaInfoExtract MediaInfoSync", true)
                             .ConfigureAwait(false);
                         if (restored) jsonRestoredCount++;
                     }
                 }
 
-                if (jsonBackfillCount > 0 || jsonRestoredCount > 0)
+                if (jsonRestoredCount > 0)
                 {
                     _logger.Info(
-                        $"MediaInfoExtract - Media info sync pre-pass: {jsonBackfillCount} DB→JSON, {jsonRestoredCount} JSON→DB");
+                        $"MediaInfoExtract - Media info sync pre-pass: {jsonRestoredCount} JSON→DB");
+                }
+
+                // DB → JSON: backfill existing DB media info to JSON (skip in Restore-only mode)
+                if (!mediaInfoRestoreMode)
+                {
+                    var jsonBackfillCount = 0;
+
+                    foreach (var item in items)
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            _logger.Info("MediaInfoExtract - Scheduled Task Cancelled");
+                            return;
+                        }
+
+                        if (Plugin.LibraryApi.HasMediaInfo(item))
+                        {
+                            await Plugin.MediaInfoApi
+                                .SerializeMediaInfo(item.InternalId, syncDirectoryService, false,
+                                    "MediaInfoExtract MediaInfoSync")
+                                .ConfigureAwait(false);
+                            jsonBackfillCount++;
+                        }
+                    }
+
+                    if (jsonBackfillCount > 0)
+                    {
+                        _logger.Info(
+                            $"MediaInfoExtract - Media info sync pre-pass: {jsonBackfillCount} DB→JSON");
+                    }
                 }
             }
 
@@ -104,7 +124,7 @@ namespace StrmIntros.ScheduledTask
                     strmMissingCount++;
                     return false;
                 }
-                if (Plugin.LibraryApi.HasMediaInfo(item))
+                if (Plugin.LibraryApi.HasMediaInfo(item) && !item.IsShortcut)
                 {
                     alreadyCompleteCount++;
                     return false;

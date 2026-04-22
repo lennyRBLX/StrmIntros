@@ -60,6 +60,18 @@ namespace StrmIntros.ScheduledTask
             if (enableIntroDbPublish && !string.IsNullOrWhiteSpace(introDbApiKey))
                 _logger.Info("IntroDb Publish: Enabled");
 
+            var enableTheIntroDbPublish = pluginOptions.IntroSkipOptions.EnableTheIntroDbPublish;
+            var theIntroDbApiKey = pluginOptions.IntroSkipOptions.TheIntroDbApiKey;
+            if (enableTheIntroDbPublish && !string.IsNullOrWhiteSpace(theIntroDbApiKey))
+                _logger.Info("TheIntroDb Publish: Enabled");
+
+            var enablePublicMetaDbPublish = pluginOptions.IntroSkipOptions.EnablePublicMetaDbPublish;
+            var publicMetaDbApiKey = pluginOptions.IntroSkipOptions.PublicMetaDbApiKey;
+            if (!string.IsNullOrWhiteSpace(publicMetaDbApiKey))
+                _logger.Info("PublicMetaDb: Enabled");
+            if (enablePublicMetaDbPublish && !string.IsNullOrWhiteSpace(publicMetaDbApiKey))
+                _logger.Info("PublicMetaDb Publish: Enabled");
+
             var persistMediaInfoMode = pluginOptions.MediaInfoExtractOptions.PersistMediaInfoMode;
             _logger.Info("Persist MediaInfo Mode: " + persistMediaInfoMode);
             var persistMediaInfo = persistMediaInfoMode != PersistMediaInfoOption.None.ToString();
@@ -279,6 +291,168 @@ namespace StrmIntros.ScheduledTask
                 }
             }
 
+            // TheIntroDb publish pre-pass
+            if (!mediaInfoRestoreMode && enableTheIntroDbPublish &&
+                !string.IsNullOrWhiteSpace(theIntroDbApiKey) && alreadyCompleteEpisodes.Count > 0)
+            {
+                var theIntroDbPublishCount = 0;
+                var theIntroDbPublishFailCount = 0;
+
+                var theIntroDbPublishableEpisodes = alreadyCompleteEpisodes
+                    .Where(e => e.Season?.Series?.ProviderIds != null &&
+                                e.Season.Series.ProviderIds.ContainsKey("Tmdb") &&
+                                !string.IsNullOrEmpty(e.Season.Series.ProviderIds["Tmdb"]) &&
+                                e.ParentIndexNumber.HasValue && e.IndexNumber.HasValue)
+                    .ToList();
+
+                _logger.Info(
+                    $"IntroFingerprintExtract - TheIntroDb publish pre-pass: {theIntroDbPublishableEpisodes.Count} episodes to publish");
+
+                var theIntroDbPublishSemaphore = new SemaphoreSlim(4, 4);
+
+                var theIntroDbPublishTasks = theIntroDbPublishableEpisodes.Select(episode => Task.Run(async () =>
+                {
+                    try
+                    {
+                        await theIntroDbPublishSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        var published = await Plugin.TheIntroDbApi
+                            .TryPublishIntroForEpisode(episode, theIntroDbApiKey, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (published)
+                            Interlocked.Increment(ref theIntroDbPublishCount);
+                        else
+                            Interlocked.Increment(ref theIntroDbPublishFailCount);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Debug(
+                            $"TheIntroDb - Publish failed for {episode.Name}: {e.Message}");
+                        Interlocked.Increment(ref theIntroDbPublishFailCount);
+                    }
+                    finally
+                    {
+                        theIntroDbPublishSemaphore.Release();
+                    }
+                }, cancellationToken)).ToList();
+
+                try
+                {
+                    await Task.WhenAll(theIntroDbPublishTasks).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                theIntroDbPublishSemaphore.Dispose();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                if (theIntroDbPublishCount > 0 || theIntroDbPublishFailCount > 0)
+                {
+                    _logger.Info(
+                        $"IntroFingerprintExtract - TheIntroDb publish pre-pass: {theIntroDbPublishCount} published, {theIntroDbPublishFailCount} failed");
+                }
+            }
+
+            // PublicMetaDb publish pre-pass
+            if (!mediaInfoRestoreMode && enablePublicMetaDbPublish &&
+                !string.IsNullOrWhiteSpace(publicMetaDbApiKey) && alreadyCompleteEpisodes.Count > 0)
+            {
+                var publicMetaDbPublishCount = 0;
+                var publicMetaDbPublishFailCount = 0;
+
+                var publicMetaDbPublishableEpisodes = alreadyCompleteEpisodes
+                    .Where(e => e.Season?.Series?.ProviderIds != null &&
+                                e.Season.Series.ProviderIds.ContainsKey("Tmdb") &&
+                                !string.IsNullOrEmpty(e.Season.Series.ProviderIds["Tmdb"]) &&
+                                Plugin.ChapterApi.HasIntro(e))
+                    .ToList();
+
+                _logger.Info(
+                    $"IntroFingerprintExtract - PublicMetaDb publish pre-pass: {publicMetaDbPublishableEpisodes.Count} episodes to publish");
+
+                var publicMetaDbPublishSemaphore = new SemaphoreSlim(4, 4);
+
+                var publicMetaDbPublishTasks = publicMetaDbPublishableEpisodes.Select(episode => Task.Run(async () =>
+                {
+                    try
+                    {
+                        await publicMetaDbPublishSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        var published = await Plugin.PublicMetaDbApi
+                            .TryPublishIntroForEpisode(episode, publicMetaDbApiKey, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (published)
+                            Interlocked.Increment(ref publicMetaDbPublishCount);
+                        else
+                            Interlocked.Increment(ref publicMetaDbPublishFailCount);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Debug(
+                            $"PublicMetaDb - Publish failed for {episode.Name}: {e.Message}");
+                        Interlocked.Increment(ref publicMetaDbPublishFailCount);
+                    }
+                    finally
+                    {
+                        publicMetaDbPublishSemaphore.Release();
+                    }
+                }, cancellationToken)).ToList();
+
+                try
+                {
+                    await Task.WhenAll(publicMetaDbPublishTasks).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                publicMetaDbPublishSemaphore.Dispose();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                if (publicMetaDbPublishCount > 0 || publicMetaDbPublishFailCount > 0)
+                {
+                    _logger.Info(
+                        $"IntroFingerprintExtract - PublicMetaDb publish pre-pass: {publicMetaDbPublishCount} published, {publicMetaDbPublishFailCount} failed");
+                }
+            }
+
             // Chapter-name pre-pass: detect intros from chapter names (e.g. "OP", "Opening", "Intro")
             if (!mediaInfoRestoreMode)
             {
@@ -306,7 +480,183 @@ namespace StrmIntros.ScheduledTask
                 }
             }
 
-            _logger.Info($"IntroFingerprintExtract - Total episodes before IntroDb pre-pass: {episodes.Count}");
+            _logger.Info($"IntroFingerprintExtract - Total episodes before PublicMetaDb/TheIntroDb/IntroDb pre-pass: {episodes.Count}");
+
+            // TheIntroDb fetch pre-pass: query episodes with TMDB IDs (tried first, before IntroDb)
+            var theIntroDbResolvedIds = new HashSet<long>();
+            if (!mediaInfoRestoreMode)
+            {
+                var withTmdb = episodes.Where(e =>
+                    e.Season?.Series?.ProviderIds != null &&
+                    e.Season.Series.ProviderIds.ContainsKey("Tmdb") &&
+                    !string.IsNullOrEmpty(e.Season.Series.ProviderIds["Tmdb"]) &&
+                    e.ParentIndexNumber.HasValue && e.IndexNumber.HasValue).ToList();
+
+                var skippedTmdbCount = episodes.Count - withTmdb.Count;
+                if (skippedTmdbCount > 0)
+                {
+                    _logger.Info(
+                        $"IntroFingerprintExtract - TheIntroDb pre-pass: {skippedTmdbCount} episodes skipped (no TMDB ID)");
+                }
+
+                var theIntroDbResolved = new ConcurrentBag<long>();
+                var theIntroDbIndex = 0;
+                var theIntroDbTotal = episodes.Count;
+
+                var theIntroDbSemaphore = new SemaphoreSlim(4, 4);
+
+                var theIntroDbTasks = withTmdb.Select(episode => Task.Run(async () =>
+                {
+                    try
+                    {
+                        await theIntroDbSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        var applied = await Plugin.TheIntroDbApi
+                            .TryApplyTheIntroDbForEpisode(episode, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (applied)
+                        {
+                            theIntroDbResolved.Add(episode.InternalId);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Debug($"TheIntroDb - Episode lookup failed: {e.Message}");
+                    }
+                    finally
+                    {
+                        theIntroDbSemaphore.Release();
+                        var current = Interlocked.Increment(ref theIntroDbIndex);
+                        progress.Report(2.5 * current / theIntroDbTotal);
+                    }
+                }, cancellationToken)).ToList();
+
+                try
+                {
+                    await Task.WhenAll(theIntroDbTasks).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                theIntroDbSemaphore.Dispose();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                _logger.Info(
+                    $"IntroFingerprintExtract - TheIntroDb pre-pass: {theIntroDbResolved.Count} of {withTmdb.Count} episodes resolved");
+
+                if (theIntroDbResolved.Count > 0)
+                {
+                    theIntroDbResolvedIds = new HashSet<long>(theIntroDbResolved);
+                    episodes = episodes.Where(e => !theIntroDbResolvedIds.Contains(e.InternalId)).ToList();
+                }
+            }
+
+            // PublicMetaDb fetch pre-pass: query episodes with TMDB IDs (requires API key)
+            var publicMetaDbResolvedIds = new HashSet<long>();
+            if (!mediaInfoRestoreMode && !string.IsNullOrWhiteSpace(publicMetaDbApiKey))
+            {
+                var withTmdbForPublicMetaDb = episodes.Where(e =>
+                    e.Season?.Series?.ProviderIds != null &&
+                    e.Season.Series.ProviderIds.ContainsKey("Tmdb") &&
+                    !string.IsNullOrEmpty(e.Season.Series.ProviderIds["Tmdb"]) &&
+                    e.ParentIndexNumber.HasValue && e.IndexNumber.HasValue).ToList();
+
+                var skippedTmdbCountPm = episodes.Count - withTmdbForPublicMetaDb.Count;
+                if (skippedTmdbCountPm > 0)
+                {
+                    _logger.Info(
+                        $"IntroFingerprintExtract - PublicMetaDb pre-pass: {skippedTmdbCountPm} episodes skipped (no TMDB ID)");
+                }
+
+                var publicMetaDbResolved = new ConcurrentBag<long>();
+                var publicMetaDbIndex = 0;
+                var publicMetaDbTotal = episodes.Count;
+
+                var publicMetaDbSemaphore = new SemaphoreSlim(4, 4);
+
+                var publicMetaDbTasks = withTmdbForPublicMetaDb.Select(episode => Task.Run(async () =>
+                {
+                    try
+                    {
+                        await publicMetaDbSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        var applied = await Plugin.PublicMetaDbApi
+                            .TryApplyPublicMetaDbForEpisode(episode, publicMetaDbApiKey, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (applied)
+                        {
+                            publicMetaDbResolved.Add(episode.InternalId);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Debug($"PublicMetaDb - Episode lookup failed: {e.Message}");
+                    }
+                    finally
+                    {
+                        publicMetaDbSemaphore.Release();
+                        var current = Interlocked.Increment(ref publicMetaDbIndex);
+                        progress.Report(2.5 * current / publicMetaDbTotal);
+                    }
+                }, cancellationToken)).ToList();
+
+                try
+                {
+                    await Task.WhenAll(publicMetaDbTasks).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                publicMetaDbSemaphore.Dispose();
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Info("IntroFingerprintExtract - Scheduled Task Cancelled");
+                    return;
+                }
+
+                _logger.Info(
+                    $"IntroFingerprintExtract - PublicMetaDb pre-pass: {publicMetaDbResolved.Count} of {withTmdbForPublicMetaDb.Count} episodes resolved");
+
+                if (publicMetaDbResolved.Count > 0)
+                {
+                    publicMetaDbResolvedIds = new HashSet<long>(publicMetaDbResolved);
+                    episodes = episodes.Where(e => !publicMetaDbResolvedIds.Contains(e.InternalId)).ToList();
+                }
+            }
 
             // IntroDb pre-pass: use coverageWithStats to find episodes with segments, then fetch only those
             if (!mediaInfoRestoreMode)
@@ -801,6 +1151,99 @@ namespace StrmIntros.ScheduledTask
                     {
                         _logger.Info(
                             $"IntroFingerprintExtract - IntroDb publish for {taskSeason.Path}: {publishCount} published, {publishFailCount} failed");
+                    }
+                }
+
+                // Phase 3b: Publish newly-detected intros to TheIntroDb
+                if (!mediaInfoRestoreMode && enableTheIntroDbPublish &&
+                    !string.IsNullOrWhiteSpace(theIntroDbApiKey))
+                {
+                    var theIntroDbPubCount = 0;
+                    var theIntroDbPubFailCount = 0;
+
+                    foreach (var episode in season)
+                    {
+                        if (cancellationToken.IsCancellationRequested) break;
+
+                        if (!Plugin.ChapterApi.HasIntro(episode)) continue;
+
+                        // Skip if already resolved by TheIntroDb fetch pre-pass
+                        if (theIntroDbResolvedIds.Contains(episode.InternalId)) continue;
+
+                        try
+                        {
+                            var published = await Plugin.TheIntroDbApi
+                                .TryPublishIntroForEpisode(episode, theIntroDbApiKey, cancellationToken)
+                                .ConfigureAwait(false);
+
+                            if (published)
+                                theIntroDbPubCount++;
+                            else
+                                theIntroDbPubFailCount++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Debug(
+                                $"TheIntroDb - Publish failed for {episode.Name}: {e.Message}");
+                            theIntroDbPubFailCount++;
+                        }
+                    }
+
+                    if (theIntroDbPubCount > 0 || theIntroDbPubFailCount > 0)
+                    {
+                        _logger.Info(
+                            $"IntroFingerprintExtract - TheIntroDb publish for {taskSeason.Path}: {theIntroDbPubCount} published, {theIntroDbPubFailCount} failed");
+                    }
+                }
+
+                // Phase 3c: Publish newly-detected intros to PublicMetaDb
+                if (!mediaInfoRestoreMode && enablePublicMetaDbPublish &&
+                    !string.IsNullOrWhiteSpace(publicMetaDbApiKey))
+                {
+                    var publicMetaDbPubCount = 0;
+                    var publicMetaDbPubFailCount = 0;
+
+                    foreach (var episode in season)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (!Plugin.ChapterApi.HasIntro(episode)) continue;
+
+                        // Skip if already resolved by PublicMetaDb or TheIntroDb fetch pre-pass
+                        if (publicMetaDbResolvedIds.Contains(episode.InternalId)) continue;
+                        if (theIntroDbResolvedIds.Contains(episode.InternalId)) continue;
+
+                        try
+                        {
+                            var published = await Plugin.PublicMetaDbApi
+                                .TryPublishIntroForEpisode(episode, publicMetaDbApiKey, cancellationToken)
+                                .ConfigureAwait(false);
+
+                            if (published)
+                                publicMetaDbPubCount++;
+                            else
+                                publicMetaDbPubFailCount++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.Debug(
+                                $"PublicMetaDb - Publish failed for {episode.Name}: {e.Message}");
+                            publicMetaDbPubFailCount++;
+                        }
+                    }
+
+                    if (publicMetaDbPubCount > 0 || publicMetaDbPubFailCount > 0)
+                    {
+                        _logger.Info(
+                            $"IntroFingerprintExtract - PublicMetaDb publish for {taskSeason.Path}: {publicMetaDbPubCount} published, {publicMetaDbPubFailCount} failed");
                     }
                 }
 

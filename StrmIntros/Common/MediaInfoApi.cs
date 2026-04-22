@@ -304,6 +304,51 @@ namespace StrmIntros.Common
             return await SerializeMediaInfo(workItem, ds, overwrite, source).ConfigureAwait(false);
         }
 
+        public bool PersistMediaSourceToDb(BaseItem workItem, MediaSourceInfo mediaSource, string source)
+        {
+            if (mediaSource?.MediaStreams == null || !mediaSource.RunTimeTicks.HasValue)
+            {
+                _logger.Debug("MediaInfoPersist - DB Persist Skipped - No probe result (" + source + ")");
+                return false;
+            }
+
+            try
+            {
+                _itemRepository.SaveMediaStreams(workItem.InternalId, mediaSource.MediaStreams,
+                    CancellationToken.None);
+
+                workItem.Size = mediaSource.Size.GetValueOrDefault();
+                workItem.RunTimeTicks = mediaSource.RunTimeTicks;
+                workItem.Container = mediaSource.Container;
+                workItem.TotalBitrate = mediaSource.Bitrate.GetValueOrDefault();
+
+                var videoStream = mediaSource.MediaStreams
+                    .Where(s => s.Type == MediaStreamType.Video && s.Width.HasValue && s.Height.HasValue)
+                    .OrderByDescending(s => (long)s.Width.Value * s.Height.Value)
+                    .FirstOrDefault();
+
+                if (videoStream != null)
+                {
+                    workItem.Width = videoStream.Width.GetValueOrDefault();
+                    workItem.Height = videoStream.Height.GetValueOrDefault();
+                }
+
+                _libraryManager.UpdateItems(new List<BaseItem> { workItem }, null,
+                    ItemUpdateType.MetadataImport, false, false, null, CancellationToken.None);
+
+                _logger.Debug("MediaInfoPersist - DB Persist Success (" + source + "): " + workItem.Path);
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                _logger.Error("MediaInfoPersist - DB Persist Failed (" + source + "): " + workItem.Path);
+                _logger.Error(e.Message);
+                _logger.Debug(e.StackTrace);
+                return false;
+            }
+        }
+
         public async Task<bool> DeserializeMediaInfo(BaseItem item, IDirectoryService directoryService, string source,
             bool ignoreFileChange)
         {

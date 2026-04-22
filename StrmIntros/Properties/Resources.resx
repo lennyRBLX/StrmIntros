@@ -368,6 +368,30 @@
   <data name="IntroSkipOptions_EnableIntroDbPublish_Publish_locally_detected_intros_to_IntroDb" xml:space="preserve">
     <value>Publish locally-detected intros to IntroDb after fingerprint analysis. Requires a valid API key.</value>
   </data>
+  <data name="IntroSkipOptions_TheIntroDbApiKey_TheIntroDb_API_Key" xml:space="preserve">
+    <value>TheIntroDb API Key</value>
+  </data>
+  <data name="IntroSkipOptions_TheIntroDbApiKey_API_key_for_TheIntroDb" xml:space="preserve">
+    <value>API key for TheIntroDb. Used for fetching and publishing intros. Leave blank to disable.</value>
+  </data>
+  <data name="IntroSkipOptions_EnableTheIntroDbPublish_Enable_TheIntroDb_Publish" xml:space="preserve">
+    <value>Enable TheIntroDb Publish</value>
+  </data>
+  <data name="IntroSkipOptions_EnableTheIntroDbPublish_Publish_locally_detected_intros_to_TheIntroDb" xml:space="preserve">
+    <value>Publish locally-detected intros to TheIntroDb after fingerprint analysis. Requires a valid API key.</value>
+  </data>
+  <data name="IntroSkipOptions_PublicMetaDbApiKey_PublicMetaDb_API_Key" xml:space="preserve">
+    <value>PublicMetaDb API Key</value>
+  </data>
+  <data name="IntroSkipOptions_PublicMetaDbApiKey_API_key_for_PublicMetaDb" xml:space="preserve">
+    <value>API key for PublicMetaDb. Used for fetching and publishing intros. Leave blank to disable.</value>
+  </data>
+  <data name="IntroSkipOptions_EnablePublicMetaDbPublish_Enable_PublicMetaDb_Publish" xml:space="preserve">
+    <value>Enable PublicMetaDb Publish</value>
+  </data>
+  <data name="IntroSkipOptions_EnablePublicMetaDbPublish_Publish_locally_detected_intros_to_PublicMetaDb" xml:space="preserve">
+    <value>Publish locally-detected intros to PublicMetaDb after fingerprint analysis. Requires a valid API key.</value>
+  </data>
   <data name="MetadataEnhanceOptions_EnableAltMovieDbUrl" xml:space="preserve">
     <value>Use Alternative MovieDb Config</value>
   </data>
@@ -556,6 +580,12 @@
   </data>
   <data name="GeneralOptions_Tier2MaxConcurrentCount_Refresh_metadata__subtitle__local_tasks__Default_is_1_" xml:space="preserve">
     <value>Shared by refreshing persons, episodes, external subtitles, local processing tasks, etc. It must be between 1 to 20. Default is 1.</value>
+  </data>
+  <data name="GeneralOptions_CatchupRescanIntervalMinutes_Catchup_Rescan_Interval__Minutes_" xml:space="preserve">
+    <value>Catchup Rescan Interval (Minutes)</value>
+  </data>
+  <data name="GeneralOptions_CatchupRescanIntervalMinutes_Periodically_rescan_for_items_missing_media_info__0_to_disable__Default_is_60_" xml:space="preserve">
+    <value>Periodically rescan for items missing media info. 0 to disable. Default is 60.</value>
   </data>
   <data name="GeneralOptions_CooldownDurationSeconds_Applicable_to_single_thread_mode__Default_is_0_" xml:space="preserve">
     <value>Applicable to single thread mode. It must be between 0 and 60. Default is 0.</value>

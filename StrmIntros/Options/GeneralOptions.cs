@@ -50,5 +50,11 @@ namespace StrmIntros.Options
         [DescriptionL("GeneralOptions_Tier2MaxConcurrentCount_Refresh_metadata__subtitle__local_tasks__Default_is_1_", typeof(Resources))]
         [Required, MinValue(1), MaxValue(20)]
         public int Tier2MaxConcurrentCount { get; set; } = 1;
+
+        [DisplayNameL("GeneralOptions_CatchupRescanIntervalMinutes_Catchup_Rescan_Interval__Minutes_", typeof(Resources))]
+        [DescriptionL("GeneralOptions_CatchupRescanIntervalMinutes_Periodically_rescan_for_items_missing_media_info__0_to_disable__Default_is_60_", typeof(Resources))]
+        [VisibleCondition(nameof(CatchupMode), SimpleCondition.IsTrue)]
+        [Required, MinValue(0), MaxValue(1440)]
+        public int CatchupRescanIntervalMinutes { get; set; } = 60;
     }
 }

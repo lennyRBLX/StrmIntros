@@ -42,5 +42,27 @@ namespace StrmIntros.Options
         [VisibleCondition(nameof(UnlockIntroSkip), SimpleCondition.IsTrue)]
         public bool EnableIntroDbPublish { get; set; } = false;
 
+        [DisplayNameL("IntroSkipOptions_TheIntroDbApiKey_TheIntroDb_API_Key", typeof(Resources))]
+        [DescriptionL("IntroSkipOptions_TheIntroDbApiKey_API_key_for_TheIntroDb", typeof(Resources))]
+        [VisibleCondition(nameof(UnlockIntroSkip), SimpleCondition.IsTrue)]
+        public string TheIntroDbApiKey { get; set; } = string.Empty;
+
+        [DisplayNameL("IntroSkipOptions_EnableTheIntroDbPublish_Enable_TheIntroDb_Publish", typeof(Resources))]
+        [DescriptionL("IntroSkipOptions_EnableTheIntroDbPublish_Publish_locally_detected_intros_to_TheIntroDb", typeof(Resources))]
+        [Required]
+        [VisibleCondition(nameof(UnlockIntroSkip), SimpleCondition.IsTrue)]
+        public bool EnableTheIntroDbPublish { get; set; } = false;
+
+        [DisplayNameL("IntroSkipOptions_PublicMetaDbApiKey_PublicMetaDb_API_Key", typeof(Resources))]
+        [DescriptionL("IntroSkipOptions_PublicMetaDbApiKey_API_key_for_PublicMetaDb", typeof(Resources))]
+        [VisibleCondition(nameof(UnlockIntroSkip), SimpleCondition.IsTrue)]
+        public string PublicMetaDbApiKey { get; set; } = string.Empty;
+
+        [DisplayNameL("IntroSkipOptions_EnablePublicMetaDbPublish_Enable_PublicMetaDb_Publish", typeof(Resources))]
+        [DescriptionL("IntroSkipOptions_EnablePublicMetaDbPublish_Publish_locally_detected_intros_to_PublicMetaDb", typeof(Resources))]
+        [Required]
+        [VisibleCondition(nameof(UnlockIntroSkip), SimpleCondition.IsTrue)]
+        public bool EnablePublicMetaDbPublish { get; set; } = false;
+
     }
 }

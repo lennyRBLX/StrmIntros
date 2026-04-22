@@ -33,6 +33,9 @@ namespace StrmIntros.Common
         public static ConcurrentQueue<BaseItem> FingerprintItemQueue = new ConcurrentQueue<BaseItem>();
         public static Task MediaInfoProcessTask;
         public static Task FingerprintProcessTask;
+        public static Task MediaInfoRescanTask;
+        public static CancellationTokenSource RescanTokenSource;
+        private static DateTime _lastRescanRunTime = DateTime.MinValue;
 
         public static bool IsMediaInfoProcessTaskRunning { get; private set; }
 
@@ -93,6 +96,29 @@ namespace StrmIntros.Common
                         }
 
                         FingerprintProcessTask = null;
+                    }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }
+
+            if (MediaInfoRescanTask is null)
+            {
+                MediaInfoRescanTask = MediaInfo_RescanLoopAsync()
+                    .ContinueWith(task =>
+                    {
+                        if (task.IsFaulted)
+                        {
+                            Logger.Debug(
+                                $"(Trace) MediaInfo_RescanLoopAsync terminated unexpectedly. Exception: {task.Exception?.Flatten()}");
+                        }
+                        else if (task.IsCanceled)
+                        {
+                            Logger.Debug("(Trace) MediaInfo_RescanLoopAsync was canceled.");
+                        }
+                        else
+                        {
+                            Logger.Debug("(Trace) MediaInfo_RescanLoopAsync completed successfully.");
+                        }
+
+                        MediaInfoRescanTask = null;
                     }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
 
@@ -164,7 +190,7 @@ namespace StrmIntros.Common
                         var library = dequeueItem.GetTopParent();
                         var progress = library?.GetRefreshProgress();
 
-                        if (currentQueueCount < maxConcurrentCount && progress.HasValue)
+                        if (currentQueueCount <= maxConcurrentCount && progress.HasValue)
                         {
                             deferredItems.Add(dequeueItem);
                             //Logger.Debug("MediaInfoExtract - Item Deferred: " + dequeueItem.Name + " - " + dequeueItem.Path);
@@ -348,7 +374,7 @@ namespace StrmIntros.Common
                         var library = dequeueItem.GetTopParent();
                         var progress = library?.GetRefreshProgress();
 
-                        if (currentQueueCount < maxConcurrentCount && progress.HasValue)
+                        if (currentQueueCount <= maxConcurrentCount && progress.HasValue)
                         {
                             deferredItems.Add(dequeueItem);
                         }
@@ -437,7 +463,7 @@ namespace StrmIntros.Common
                                             return;
                                         }
 
-                                        if (Plugin.LibraryApi.IsExtractNeeded(taskItem, enableImageCapture))
+                                        if (Plugin.LibraryApi.IsExtractNeeded(taskItem, enableImageCapture, forceShortcutReExtract: false))
                                         {
                                             result1 = await Plugin.LibraryApi.OrchestrateMediaInfoProcessAsync(taskItem,
                                                     "IntroFingerprintExtract Catchup", cancellationToken)
@@ -594,10 +620,89 @@ namespace StrmIntros.Common
             }
         }
 
+        public static async Task MediaInfo_RescanLoopAsync()
+        {
+            Logger.Info("MediaInfoRescan - Loop Started");
+
+            RescanTokenSource = new CancellationTokenSource();
+            var cancellationToken = RescanTokenSource.Token;
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var intervalMinutes = Plugin.Instance.GetPluginOptions()
+                    .GeneralOptions.CatchupRescanIntervalMinutes;
+
+                if (intervalMinutes <= 0 || !IsCatchupTaskSelected(CatchupTask.MediaInfo))
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                var interval = TimeSpan.FromMinutes(intervalMinutes);
+                var elapsed = DateTime.UtcNow - _lastRescanRunTime;
+                if (elapsed < interval)
+                {
+                    try
+                    {
+                        await Task.Delay(interval - elapsed, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        break;
+                    }
+                }
+
+                _lastRescanRunTime = DateTime.UtcNow;
+
+                try
+                {
+                    if (IsMediaInfoProcessTaskRunning || !MediaInfoExtractItemQueue.IsEmpty)
+                    {
+                        Logger.Debug("MediaInfoRescan - Skipped (queue not drained)");
+                        continue;
+                    }
+
+                    var candidates = Plugin.LibraryApi.FetchPreExtractTaskItems();
+                    var missing = candidates.Where(i => !Plugin.LibraryApi.HasMediaInfo(i)).ToList();
+
+                    if (missing.Count == 0)
+                    {
+                        Logger.Debug("MediaInfoRescan - No missing-media-info items found");
+                        continue;
+                    }
+
+                    Logger.Info($"MediaInfoRescan - Enqueuing {missing.Count} item(s) missing media info");
+                    foreach (var item in missing)
+                    {
+                        MediaInfoExtractItemQueue.Enqueue(item);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error("MediaInfoRescan - Scan failed: " + e.Message);
+                    Logger.Debug(e.StackTrace);
+                }
+            }
+
+            Logger.Info("MediaInfoRescan - Loop Stopped");
+        }
+
         public static void Dispose()
         {
             MediaInfoTokenSource?.Cancel();
             FingerprintTokenSource?.Cancel();
+            RescanTokenSource?.Cancel();
         }
     }
 }

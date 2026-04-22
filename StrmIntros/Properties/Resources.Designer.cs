@@ -372,6 +372,25 @@ namespace StrmIntros.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Catchup Rescan Interval (Minutes).
+        /// </summary>
+        public static string GeneralOptions_CatchupRescanIntervalMinutes_Catchup_Rescan_Interval__Minutes_ {
+            get {
+                return ResourceManager.GetString("GeneralOptions_CatchupRescanIntervalMinutes_Catchup_Rescan_Interval__Minutes_", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Periodically rescan for items missing media info. 0 to disable. Default is 60..
+        /// </summary>
+        public static string GeneralOptions_CatchupRescanIntervalMinutes_Periodically_rescan_for_items_missing_media_info__0_to_disable__Default_is_60_ {
+            get {
+                return ResourceManager.GetString("GeneralOptions_CatchupRescanIntervalMinutes_Periodically_rescan_for_items_missin" +
+                        "g_media_info__0_to_disable__Default_is_60_", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Catchup Task Scope.
         /// </summary>
         public static string GeneralOptions_CatchupScope_Catchup_Scope {
@@ -619,6 +638,78 @@ namespace StrmIntros.Properties {
         public static string IntroSkipOptions_EnableIntroDbPublish_Publish_locally_detected_intros_to_IntroDb {
             get {
                 return ResourceManager.GetString("IntroSkipOptions_EnableIntroDbPublish_Publish_locally_detected_intros_to_IntroDb", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to TheIntroDb API Key.
+        /// </summary>
+        public static string IntroSkipOptions_TheIntroDbApiKey_TheIntroDb_API_Key {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_TheIntroDbApiKey_TheIntroDb_API_Key", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to API key for TheIntroDb. Used for fetching and publishing intros. Leave blank to disable..
+        /// </summary>
+        public static string IntroSkipOptions_TheIntroDbApiKey_API_key_for_TheIntroDb {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_TheIntroDbApiKey_API_key_for_TheIntroDb", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Enable TheIntroDb Publish.
+        /// </summary>
+        public static string IntroSkipOptions_EnableTheIntroDbPublish_Enable_TheIntroDb_Publish {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_EnableTheIntroDbPublish_Enable_TheIntroDb_Publish", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Publish locally-detected intros to TheIntroDb after fingerprint analysis. Requires a valid API key..
+        /// </summary>
+        public static string IntroSkipOptions_EnableTheIntroDbPublish_Publish_locally_detected_intros_to_TheIntroDb {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_EnableTheIntroDbPublish_Publish_locally_detected_intros_to_TheIntroDb", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to PublicMetaDb API Key.
+        /// </summary>
+        public static string IntroSkipOptions_PublicMetaDbApiKey_PublicMetaDb_API_Key {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_PublicMetaDbApiKey_PublicMetaDb_API_Key", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to API key for PublicMetaDb. Used for fetching and publishing intros. Leave blank to disable..
+        /// </summary>
+        public static string IntroSkipOptions_PublicMetaDbApiKey_API_key_for_PublicMetaDb {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_PublicMetaDbApiKey_API_key_for_PublicMetaDb", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Enable PublicMetaDb Publish.
+        /// </summary>
+        public static string IntroSkipOptions_EnablePublicMetaDbPublish_Enable_PublicMetaDb_Publish {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_EnablePublicMetaDbPublish_Enable_PublicMetaDb_Publish", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Publish locally-detected intros to PublicMetaDb after fingerprint analysis. Requires a valid API key..
+        /// </summary>
+        public static string IntroSkipOptions_EnablePublicMetaDbPublish_Publish_locally_detected_intros_to_PublicMetaDb {
+            get {
+                return ResourceManager.GetString("IntroSkipOptions_EnablePublicMetaDbPublish_Publish_locally_detected_intros_to_PublicMetaDb", resourceCulture);
             }
         }
 

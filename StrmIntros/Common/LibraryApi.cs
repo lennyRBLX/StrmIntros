@@ -231,7 +231,7 @@ namespace StrmIntros.Common
 
             var unprocessedItems = FilterUnprocessed(resultItems
                 .Concat(includeExtra ? resultItems.SelectMany(f => f.GetExtras(IncludeExtraTypes)) : Enumerable.Empty<BaseItem>())
-                .ToList());
+                .ToList(), forceShortcutReExtract: false);
             var orderedItems = OrderByDescending(unprocessedItems);
 
             return orderedItems;
@@ -295,6 +295,21 @@ namespace StrmIntros.Common
                 }
 
                 var itemsMediaInfo = _libraryManager.GetItemList(itemsMediaInfoQuery);
+
+                // Also fetch .strm (shortcut) items that may already have media info extracted
+                var itemsStrmQuery = new InternalItemsQuery
+                {
+                    HasPath = true,
+                    MediaTypes = new[] { MediaType.Video, MediaType.Audio }
+                };
+                if (itemsMediaInfoQuery.PathStartsWithAny != null)
+                {
+                    itemsStrmQuery.PathStartsWithAny = itemsMediaInfoQuery.PathStartsWithAny;
+                }
+                var itemsStrm = _libraryManager.GetItemList(itemsStrmQuery)
+                    .Where(i => i.IsShortcut).ToArray();
+                itemsMediaInfo = itemsMediaInfo.Concat(itemsStrm).GroupBy(i => i.InternalId)
+                    .Select(g => g.First()).ToArray();
 
                 var itemsImageCaptureQuery = new InternalItemsQuery
                 {
@@ -467,7 +482,7 @@ namespace StrmIntros.Common
             return includeNoPrem;
         }
 
-        private List<BaseItem> FilterUnprocessed(List<BaseItem> items)
+        private List<BaseItem> FilterUnprocessed(List<BaseItem> items, bool forceShortcutReExtract = true)
         {
             var enableImageCapture = Plugin.Instance.GetPluginOptions().MediaInfoExtractOptions.EnableImageCapture;
 
@@ -475,7 +490,7 @@ namespace StrmIntros.Common
 
             foreach (var item in items)
             {
-                if (IsExtractNeeded(item, enableImageCapture))
+                if (IsExtractNeeded(item, enableImageCapture, forceShortcutReExtract))
                 {
                     results.Add(item);
                 }
@@ -490,7 +505,7 @@ namespace StrmIntros.Common
             return results;
         }
 
-        public bool IsExtractNeeded(BaseItem item, bool enableImageCapture)
+        public bool IsExtractNeeded(BaseItem item, bool enableImageCapture, bool forceShortcutReExtract = true)
         {
             if (item.MediaContainer.HasValue && ExcludeMediaContainers.Contains(item.MediaContainer.Value))
                 return false;
@@ -502,6 +517,8 @@ namespace StrmIntros.Common
             }
 
             if (!HasMediaInfo(item)) return true;
+
+            if (item.IsShortcut && forceShortcutReExtract) return true; // .strm files should always be re-extracted by scheduled task
 
             if (!enableImageCapture) return false;
 
@@ -686,7 +703,17 @@ namespace StrmIntros.Common
 
             if (extractSkip) return null;
 
-            await Plugin.MediaInfoApi.GetPlaybackMediaSources(taskItem, cancellationToken).ConfigureAwait(false);
+            var mediaSources = await Plugin.MediaInfoApi
+                .GetPlaybackMediaSources(taskItem, cancellationToken).ConfigureAwait(false);
+
+            var defaultSourceId = taskItem.GetDefaultMediaSourceId();
+            var primarySource = mediaSources?.FirstOrDefault(s => s.Id == defaultSourceId)
+                                ?? mediaSources?.FirstOrDefault();
+
+            if (primarySource != null && primarySource.RunTimeTicks.HasValue)
+            {
+                Plugin.MediaInfoApi.PersistMediaSourceToDb(taskItem, primarySource, source);
+            }
 
             if (persistMediaInfo)
             {
@@ -697,6 +724,17 @@ namespace StrmIntros.Common
                         $"MediaInfoExtract - No media info after refresh: {taskItem.Name} - {taskItem.Path}" +
                         $" (RunTimeTicks={refreshedItem.RunTimeTicks}, Size={refreshedItem.Size}," +
                         $" Streams={refreshedItem.GetMediaStreams().Count})");
+
+                    // Probe failed, try JSON fallback
+                    var fallbackResult = await Plugin.MediaInfoApi
+                        .DeserializeMediaInfo(taskItem, directoryService, source + " Fallback", true)
+                        .ConfigureAwait(false);
+                    if (fallbackResult)
+                    {
+                        _logger.Info(
+                            $"MediaInfoExtract - JSON fallback restored media info: {taskItem.Name} - {taskItem.Path}");
+                        return false;
+                    }
                 }
 
                 await Plugin.MediaInfoApi.SerializeMediaInfo(taskItem.InternalId, directoryService, true, source)
